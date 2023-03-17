@@ -1,5 +1,5 @@
 SOURCE	:= Main.c Parser.c Registers.c Core.c
-CC	:= gcc
+CC	:= gcc -std=gnu99 -g -Wall
 TARGET	:= RVSim
 
 all: $(TARGET)

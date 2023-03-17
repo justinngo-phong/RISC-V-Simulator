@@ -27,8 +27,8 @@ int main(int argc, const char *argv[])
         unsigned mask = (1 << 31);
         for (int i = 31; i >= 0; i--)
         {
-            if (instr->instruction & mask) { printf("1 ");}
-            else { printf("0 "); }
+            if (instr->instruction & mask) { printf("1");}
+            else { printf("0"); }
 
             mask >>= 1;
         }
