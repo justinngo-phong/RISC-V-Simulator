@@ -52,7 +52,6 @@ Mkfile.old
 dkms.conf
 
 # Text files
-*.txt
 *.zip
 *.pdf
 *.swp

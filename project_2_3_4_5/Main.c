@@ -53,6 +53,7 @@ int main(int argc, const char *argv[])
 
 	// Print original values
 	printf("\nOriginal register values (only values != 0):\n");
+	printf("x[1]: %ld\n", core->reg_file[1]);
 	for (i=0; i<32; i++) {
 		if (core->reg_file[i]) {
 			printf("x[%d]: %ld\n", i, core->reg_file[i]);
@@ -81,6 +82,8 @@ int main(int argc, const char *argv[])
 
 	// Print final values
 	printf("\nFinal register values (only values != 0):\n");
+	printf("x[1]: %ld\n", core->reg_file[1]);
+	printf("x[4]: %ld\n", core->reg_file[4]);
 	for (i=0; i<32; i++) {
 		if (core->reg_file[i]) {
 			printf("x[%d]: %ld\n", i, core->reg_file[i]);
