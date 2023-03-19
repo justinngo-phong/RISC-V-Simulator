@@ -23,6 +23,7 @@ Core *initCore(Instruction_Memory *i_mem)
 		core->reg_file[i] = 0;
 	}
 
+	/* ../cpu_traces/project_four  *
 	storeDataMem(core, -63, 40);
 	storeDataMem(core, 63, 48);
 
@@ -32,6 +33,15 @@ Core *initCore(Instruction_Memory *i_mem)
 	core->reg_file[4] = 20;
 	core->reg_file[5] = 30;
 	core->reg_file[6] = -35;
+	********************************/
+
+	/* ../cpu_traces/project_five  */
+	storeDataMem(core, 100, 40);
+
+	core->reg_file[1] = 0;
+	core->reg_file[5] = 26;
+	core->reg_file[6] = -27;
+	/*******************************/
 
     return core;
 }
@@ -90,10 +100,71 @@ void decode(Core* core, PipeInstr *PI) {
 }
 
 // Execute stage
-void execute(Core *core, PipeInstr *PI) {
+void execute(Core *core, PipeInstr *PI, int pipe_idx) {
+	// Read values from register files
+	PI->dec->reg1_val = core->reg_file[PI->dec->rs1];
+	PI->dec->reg2_val = core->reg_file[PI->dec->rs2];
+
+	// Forward signals
+	Signal forwardA = 0;
+	Signal forwardB = 0;
+	Signal val1 = PI->dec->reg1_val;
+	Signal val2 = PI->dec->reg2_val;
+	
+	if (PI->dec->rs1 != 0) {
+		if (pipe_idx >= 1) { 
+			if (core->pipe[pipe_idx-1]->dec->ctrl_signals.RegWrite 
+				&& core->pipe[pipe_idx-1]->dec->rd == PI->dec->rs1) {	
+				// Forward from execute stage
+				forwardA = 2;
+				if (core->pipe[pipe_idx-1]->dec->opcode == 3) { // previous instr was a load type
+					val1 = core->pipe[pipe_idx-1]->mem_res;
+				} else { 
+					val1 = core->pipe[pipe_idx-1]->ex->ALU_result;	
+				}
+			}
+		} 
+		if (pipe_idx >= 2) {	
+			if (core->pipe[pipe_idx-2]->dec->ctrl_signals.RegWrite 
+					&& core->pipe[pipe_idx-2]->dec->rd == PI->dec->rs1) {	
+				// Forward from memory stage
+				forwardA = 1;
+				val1 = core->pipe[pipe_idx-2]->mem_res;
+			}
+		}
+	}
+
+	if (PI->dec->rs2 != 0) {
+		if (pipe_idx >= 1) { 
+			if (core->pipe[pipe_idx-1]->dec->ctrl_signals.RegWrite 
+				&& core->pipe[pipe_idx-1]->dec->rd == PI->dec->rs2) {	
+				// Forward from execute stage
+				forwardB = 2;
+				if (core->pipe[pipe_idx-1]->dec->opcode == 3) { // previous instr was a load type
+					val2 = core->pipe[pipe_idx-1]->mem_res;
+				} else { 
+					val2 = core->pipe[pipe_idx-1]->ex->ALU_result;	
+				}
+			}
+		} 
+		if (pipe_idx >= 2) {	
+			if (core->pipe[pipe_idx-2]->dec->ctrl_signals.RegWrite 
+					&& core->pipe[pipe_idx-2]->dec->rd == PI->dec->rs2) {	
+				// Forward from memory stage
+				forwardB = 1;
+				val2 = core->pipe[pipe_idx-2]->mem_res;
+			}
+		}
+	}
+
+	/*
+	Signal val1 = MUX3(forwardA, PI->dec->reg1_val, core->pipe[pipe_idx-2]->mem_res, core->pipe[pipe_idx-1]->ex->ALU_result);
+	Signal val2 = MUX3(forwardB, PI->dec->reg2_val, core->pipe[pipe_idx-2]->mem_res, core->pipe[pipe_idx-1]->ex->ALU_result);
+	*/
+	
 	// ALU operation
-	PI->ex->ALU_2nd_val = MUX(PI->dec->ctrl_signals.ALUSrc, PI->dec->reg2_val, PI->dec->immediate);
-	ALU(PI->dec->reg1_val, PI->ex->ALU_2nd_val, PI->dec->ALU_ctrl_signal, &(PI->ex->ALU_result), &(PI->ex->zero), &(PI->ex->neg));
+	PI->ex->ALU_2nd_val = MUX(PI->dec->ctrl_signals.ALUSrc, val2, PI->dec->immediate);
+	ALU(val1, PI->ex->ALU_2nd_val, PI->dec->ALU_ctrl_signal, &(PI->ex->ALU_result), &(PI->ex->zero), &(PI->ex->neg));
 	
 	/* 
 	// This is for the case that there are branch instructions.
@@ -145,42 +216,13 @@ bool tickFunc(Core *core)
 	int mem_instr = -3;
 	int wb_instr = -4;
 	int num_instr = core->instr_mem->last->addr / 4 + 1;
-	int starting_stages;
+	int stall_ex = 0;
+	int stall_mem = 0;
+	int stall_wb = 0;
 	int i;
 	// create a new pipe
 	core->pipe = malloc(num_instr * sizeof(PipeInstr));
 	
-	if (num_instr > 5) {
-		starting_stages = 4;
-	} else {
-		starting_stages = num_instr - 1;
-	}
-
-	// Starting stages
-	for (i=0; i<starting_stages; i++) {
-		core->pipe[fetch_instr] = malloc(sizeof(PipeInstr));
-		core->pipe[fetch_instr]->dec = malloc(sizeof(Decode));
-		core->pipe[fetch_instr]->ex = malloc(sizeof(Exec));
-		fetch(core, core->pipe[fetch_instr]);
-
-		if (decode_instr >= 0)
-			decode(core, core->pipe[decode_instr]);
-
-		if (exec_instr >= 0) 
-			execute(core, core->pipe[exec_instr]);
-
-		if (mem_instr >= 0)
-			memAccess(core, core->pipe[mem_instr]);
-
-		fetch_instr++;
-		decode_instr++;
-		exec_instr++;
-		mem_instr++;
-		wb_instr++;
-    	++core->clk;
-	}
-
-	// Steady stages
 	while (wb_instr < num_instr) {
 		if (fetch_instr < num_instr) {
 			core->pipe[fetch_instr] = malloc(sizeof(PipeInstr));
@@ -189,17 +231,42 @@ bool tickFunc(Core *core)
 			fetch(core, core->pipe[fetch_instr]);
 		}
 
-		if (decode_instr < num_instr)
+		if (decode_instr >= 0 && decode_instr < num_instr) {
 			decode(core, core->pipe[decode_instr]);
+			if (decode_instr >= 1) {
+				if ((core->pipe[decode_instr-1]->dec->opcode == 3)
+					&& (core->pipe[decode_instr-1]->dec->rd == core->pipe[decode_instr]->dec->rs1 || core->pipe[decode_instr-1]->dec->rd == core->pipe[decode_instr]->dec->rs2)) {
+					stall_ex = 1;
+				}
+			}
+		}	
 
-		if ((exec_instr < num_instr) && (exec_instr >= 0)) 
-			execute(core, core->pipe[exec_instr]);
+		if ((exec_instr < num_instr) && (exec_instr >= 0)) {
+			if (!stall_mem) 
+				execute(core, core->pipe[exec_instr], exec_instr);
+		}
 
-		if ((mem_instr < num_instr) && (mem_instr >= 0)) 
-			memAccess(core, core->pipe[mem_instr]);
+		if ((mem_instr < num_instr) && (mem_instr >= 0)) {
+			if (!stall_wb)
+				memAccess(core, core->pipe[mem_instr]);
+		}
 
-		if (wb_instr >= 0) 
+		if (wb_instr >= 0) {  
 			writeBack(core, core->pipe[wb_instr]);	
+		}
+
+		if (stall_ex) {
+			exec_instr--;
+			stall_ex = 0;
+			stall_mem = 1;
+		} else if (stall_mem) {
+			mem_instr--;
+			stall_mem = 0;
+			stall_wb = 1;
+		} else if (stall_wb) {
+			wb_instr--;
+			stall_wb = 0;
+		}
 
 		fetch_instr++;
 		decode_instr++;
@@ -401,6 +468,19 @@ Signal MUX(Signal sel,
            Signal input_1)
 {
     if (sel == 0) { return input_0; } else { return input_1; }
+}
+// Mux 3
+Signal MUX3(Signal sel,
+			Signal input_0,
+			Signal input_1,
+			Signal input_2) {
+	if (sel == 0) {
+		return input_0;
+	} else if (sel == 1) {
+		return input_1;
+	} else {
+		return input_2;
+	}
 }
 
 // (5). Add

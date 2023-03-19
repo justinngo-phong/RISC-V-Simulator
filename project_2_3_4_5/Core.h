@@ -88,7 +88,7 @@ void storeDataMem(Core *core, int64_t data, int start);
 int64_t loadDataMem(Core *core, int start);
 void fetch(Core *core, PipeInstr *PI);
 void decode(Core *core, PipeInstr *PI);
-void execute(Core *core, PipeInstr *PI);
+void execute(Core *core, PipeInstr *PI, int pipe_idx);
 void memAccess(Core *core, PipeInstr *PI);
 void writeBack(Core *core, PipeInstr *PI);
 
@@ -118,6 +118,12 @@ void ALU(Signal input_0,
 Signal MUX(Signal sel,
            Signal input_0,
            Signal input_1);
+
+// MUX3
+Signal MUX3(Signal sel,
+           Signal input_0,
+           Signal input_1,
+           Signal input_2);
 
 // (5). Add
 Signal Add(Signal input_0,
