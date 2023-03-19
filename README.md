@@ -1,5 +1,7 @@
 # RISC-V-Simulator
-A RISC-V simulator with five pipelined stages and hazard detection and handling.
+A RISC-V simulator with five pipelined stages and hazard detection and handling.  
+Written by: Justin Ngo  
+Last updated on: 3/19/2023  
 
 ## Description
 This is a RISC-V simulator with five stages:
