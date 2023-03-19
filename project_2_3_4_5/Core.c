@@ -127,8 +127,8 @@ void execute(Core *core, PipeInstr *PI, int pipe_idx) {
 		if (pipe_idx >= 2) {	
 			if (core->pipe[pipe_idx-2]->dec->ctrl_signals.RegWrite 
 					&& core->pipe[pipe_idx-2]->dec->rd == PI->dec->rs1) {	
-				// Forward from memory stage
 				forwardA = 1;
+				// Forward from memory stage
 				val1 = core->pipe[pipe_idx-2]->mem_res;
 			}
 		}
@@ -157,36 +157,16 @@ void execute(Core *core, PipeInstr *PI, int pipe_idx) {
 		}
 	}
 
-	/*
-	Signal val1 = MUX3(forwardA, PI->dec->reg1_val, core->pipe[pipe_idx-2]->mem_res, core->pipe[pipe_idx-1]->ex->ALU_result);
-	Signal val2 = MUX3(forwardB, PI->dec->reg2_val, core->pipe[pipe_idx-2]->mem_res, core->pipe[pipe_idx-1]->ex->ALU_result);
-	*/
-	
 	// ALU operation
 	PI->ex->ALU_2nd_val = MUX(PI->dec->ctrl_signals.ALUSrc, val2, PI->dec->immediate);
 	ALU(val1, PI->ex->ALU_2nd_val, PI->dec->ALU_ctrl_signal, &(PI->ex->ALU_result), &(PI->ex->zero), &(PI->ex->neg));
-	
-	/* 
-	// This is for the case that there are branch instructions.
-	// For a simple pipeline now, we just need to update PC by 4 at fetch every time.
-    // Set PC 
-	Signal branch_shift = ShiftLeft1(PI->dec->immediate);
-   	Signal branch_sel=0;
-	if (PI->dec->opcode == 99) {
-		if (PI->dec->funct3 == 0) { // beq
-			branch_sel = PI->ex->zero & PI->dec->ctrl_signals.Branch;
-		} else if (PI->dec->funct3 == 1) { // bne
-			branch_sel = ~PI->ex->zero & PI->dec->ctrl_signals.Branch;
-		} else if (PI->dec->funct3 == 4 || PI->dec->funct3 == 6) { // blt or bltu
-			branch_sel = PI->ex->neg & PI->dec->ctrl_signals.Branch;
-		} else if (PI->dec->funct3 == 5 || PI->dec->funct3 == 7) { // bge or bgeu
-			branch_sel = ~PI->ex->neg & PI->dec->ctrl_signals.Branch;
-		}
+
+	if (forwardA) {
+		printf("In execute stage of instruction [%d], forwardA = %ld.\n", pipe_idx + 1, forwardA);
+	} 
+	if (forwardB) {
+		printf("In execute stage of instruction [%d], forwardB = %ld.\n", pipe_idx + 1, forwardB);
 	}
-	Signal main_PC = core->PC + 4;
-	Signal branch_PC = core->PC + branch_shift;
-	core->PC = MUX(branch_sel, main_PC, branch_PC);
-	*/
 }
 
 // Memory access stage
@@ -223,12 +203,17 @@ bool tickFunc(Core *core)
 	// create a new pipe
 	core->pipe = malloc(num_instr * sizeof(PipeInstr));
 	
+	// pipeline
 	while (wb_instr < num_instr) {
+		printf("======================== Clock cycle %ld ========================\n", core->clk+1);
+
 		if (fetch_instr < num_instr) {
 			core->pipe[fetch_instr] = malloc(sizeof(PipeInstr));
 			core->pipe[fetch_instr]->dec = malloc(sizeof(Decode));
 			core->pipe[fetch_instr]->ex = malloc(sizeof(Exec));
 			fetch(core, core->pipe[fetch_instr]);
+			printf("Fetched instruction [%d].\n", fetch_instr + 1);
+				printf("-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-\n");
 		}
 
 		if (decode_instr >= 0 && decode_instr < num_instr) {
@@ -236,25 +221,42 @@ bool tickFunc(Core *core)
 			if (decode_instr >= 1) {
 				if ((core->pipe[decode_instr-1]->dec->opcode == 3)
 					&& (core->pipe[decode_instr-1]->dec->rd == core->pipe[decode_instr]->dec->rs1 || core->pipe[decode_instr-1]->dec->rd == core->pipe[decode_instr]->dec->rs2)) {
+					// insert a bubble if the previous instruction is a load type and introduces data hazards
 					stall_ex = 1;
+					printf("Inserting a bubble in the next clock cycle because of data hazard.\n");
 				}
 			}
+			printf("Decoded instruction [%d].\n", decode_instr + 1);
+				printf("-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-\n");
 		}	
 
 		if ((exec_instr < num_instr) && (exec_instr >= 0)) {
-			if (!stall_mem) 
+			if (!stall_mem) { 
 				execute(core, core->pipe[exec_instr], exec_instr);
+				printf("Executed instruction [%d].\n", exec_instr + 1);
+				printf("-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-\n");
+			} 
 		}
 
 		if ((mem_instr < num_instr) && (mem_instr >= 0)) {
-			if (!stall_wb)
+			if (!stall_wb) {
 				memAccess(core, core->pipe[mem_instr]);
+				printf("Accessed memory for instruction [%d].\n", mem_instr + 1);
+				printf("-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-\n");
+			}
 		}
 
 		if (wb_instr >= 0) {  
 			writeBack(core, core->pipe[wb_instr]);	
+			printf("Wrote back to register for instruction [%d].\n", wb_instr + 1);
+			if (core->pipe[wb_instr]->dec->ctrl_signals.RegWrite) {
+				printf("New register value: x[%ld] = %ld.\n", core->pipe[wb_instr]->dec->rd, core->pipe[wb_instr]->mem_res);
+				printf("-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-\n");
+			}
 		}
 
+		printf("\n");
+		// ensuring that the bubble is inserted for every instruction afterwards
 		if (stall_ex) {
 			exec_instr--;
 			stall_ex = 0;

@@ -31,9 +31,11 @@ void loadInstructions(Instruction_Memory *i_mem, const char *trace)
 
     Addr PC = 0; // program counter points to the zeroth location initially.
     int IMEM_index = 0;
+    int instr_num = 1;
     while ((read = getline(&line, &len, fd)) != -1)
     {
-		printf("%s\n", line);
+		printf("Instruction %d: %s\n",instr_num, line);
+    instr_num++;
         // Assign program counter
         i_mem->instructions[IMEM_index].addr = PC;
 

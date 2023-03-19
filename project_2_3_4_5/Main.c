@@ -70,6 +70,7 @@ int main(int argc, const char *argv[])
 
 	printf("\n*----------------------------------------------*\n");
     /* Task Three - Simulation */
+	printf("\nPROGRAM STARTED\n\n");
     while (core->tick(core)) {
 	}
 
